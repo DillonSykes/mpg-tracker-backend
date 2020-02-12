@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Template for scripter runtime services http gateway
+Parameters:
+  DeploymentStageName:
+    Type: String
+  CreateRecordFunctionArn:
+    Type: String
+Resources:
+  HttpDeployment:
+    DependsOn:
+      - HttpApi
+      - CreateRecordPostMethod
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId:
+        Ref: HttpApi
+  HttpStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId:
+        Ref: HttpApi
+      DeploymentId:
+        Ref: HttpDeployment
+      StageName:
+        Ref: DeploymentStageName
+      Tags:
+        - Key: Name
+          Value:
+            Ref: AWS::StackName
+        - Key: Product
+          Value: ConnectDashboard
+        - Key: Name
+          Value:
+            Ref: DeploymentStageName
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+  HttpApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name:
+        Ref: AWS::StackName
+      Tags:
+        - Key: Name
+          Value:
+            Ref: AWS::StackName
+        - Key: Product
+          Value: MpgRecord
+        - Key: Stage
+          Value:
+            Ref: DeploymentStageName
+  CreateRecordResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: HttpApi
+      ParentId:
+        Fn::GetAtt:
+          - HttpApi
+          - RootResourceId
+      PathPart: record
+  CreateRecordPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: HttpApi
+      ResourceId:
+        Ref: CreateRecordResource
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateRecordFunctionArn}/invocations
+Outputs:
+  ApiId:
+    Description: The runtime http API Id
+    Value:
+      Ref: HttpApi
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-HttpApiId
